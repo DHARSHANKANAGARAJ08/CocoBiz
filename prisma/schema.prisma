@@ -1,0 +1,338 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String
+  password  String
+  role      String   @default("ADMIN") // ADMIN, MANAGER, STAFF
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model FarmOwner {
+  id             String            @id @default(cuid())
+  ownerCode      String?           @unique // e.g. OWN-1001
+  name           String
+  phone          String
+  alternatePhone String?
+  address        String?
+  village        String
+  taluk          String?
+  district       String?
+  bankName       String?
+  accountNumber  String?
+  ifsc           String?
+  notes          String?
+  status         String            @default("ACTIVE") // ACTIVE, INACTIVE
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  farms          Farm[]
+  treeBookings   TreeBooking[]
+  harvestRecords HarvestRecord[]
+  purchases      CoconutPurchase[]
+  payments       FarmerPayment[]
+
+  @@index([name])
+  @@index([phone])
+  @@index([village])
+}
+
+model Farm {
+  id             String            @id @default(cuid())
+  farmCode       String?           @unique // e.g. FRM-101
+  name           String
+  ownerId        String
+  location       String?
+  village        String
+  taluk          String?
+  district       String?
+  totalTrees     Int               @default(0)
+  notes          String?
+  status         String            @default("ACTIVE") // ACTIVE, INACTIVE
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  owner          FarmOwner         @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  treeBookings   TreeBooking[]
+  harvestRecords HarvestRecord[]
+  purchases      CoconutPurchase[]
+
+  @@index([ownerId])
+  @@index([village])
+}
+
+model TreeBooking {
+  id                 String          @id @default(cuid())
+  bookingCode        String?         @unique // e.g. TB-2024-001
+  ownerId            String
+  farmId             String
+  bookingDate        DateTime        @default(now())
+  totalTreesBooked   Int
+  pricePerTree       Float?          @default(0)
+  expectedHarvestDate DateTime?
+  notes              String?
+  status             String          @default("BOOKED") // BOOKED, IN_PROGRESS, PARTIALLY_COMPLETED, COMPLETED, CANCELLED
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+
+  owner              FarmOwner       @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  farm               Farm            @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  harvestRecords     HarvestRecord[]
+  purchases          CoconutPurchase[]
+
+  @@index([ownerId])
+  @@index([farmId])
+  @@index([status])
+}
+
+model HarvestRecord {
+  id                 String       @id @default(cuid())
+  harvestCode        String?      @unique // e.g. HARV-2024-001
+  bookingId          String
+  ownerId            String
+  farmId             String
+  harvestDate        DateTime     @default(now())
+  treesHarvested     Int
+  coconutCount       Int
+  avgCoconutsPerTree Float        @default(0)
+  coconutPrice       Float        @default(0)
+  totalCoconutAmount Float        @default(0)
+  notes              String?
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+
+  booking            TreeBooking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  owner              FarmOwner    @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  farm               Farm         @relation(fields: [farmId], references: [id], onDelete: Cascade)
+
+  @@index([bookingId])
+  @@index([ownerId])
+  @@index([farmId])
+  @@index([harvestDate])
+}
+
+model CoconutPurchase {
+  id               String       @id @default(cuid())
+  purchaseCode     String?      @unique // e.g. PUR-2024-001
+  purchaseDate     DateTime     @default(now())
+  ownerId          String
+  farmId           String
+  bookingId        String?
+  coconutType      String       @default("WITH_HUSK") // WITH_HUSK, WITHOUT_HUSK, COPRA_GRADE
+  quantity         Int
+  pricePerCoconut  Float
+  totalAmount      Float
+  paymentStatus    String       @default("UNPAID") // UNPAID, PARTIALLY_PAID, PAID
+  notes            String?
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  owner            FarmOwner    @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  farm             Farm         @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  booking          TreeBooking? @relation(fields: [bookingId], references: [id], onDelete: SetNull)
+
+  @@index([ownerId])
+  @@index([farmId])
+  @@index([purchaseDate])
+}
+
+model FarmerPayment {
+  id              String       @id @default(cuid())
+  paymentCode     String?      @unique // e.g. PAY-2024-001
+  paymentDate     DateTime     @default(now())
+  ownerId         String
+  amount          Float
+  paymentMethod   String       @default("CASH") // CASH, UPI, BANK_TRANSFER, CHEQUE, OTHER
+  referenceNumber String?
+  notes           String?
+  isAdvance       Boolean      @default(false)
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  owner           FarmOwner    @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  @@index([ownerId])
+  @@index([paymentDate])
+}
+
+model DailyPrice {
+  id        String   @id @default(cuid())
+  date      DateTime @default(now())
+  product   String   // COCONUT, HUSK, COPRA
+  type      String   // WITH_HUSK, WITHOUT_HUSK, RAW_HUSK, DRIED_COPRA, etc.
+  unit      String   // per nut, per kg, per ton
+  price     Float
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([date])
+  @@index([product])
+}
+
+model InventoryTransaction {
+  id              String   @id @default(cuid())
+  date            DateTime @default(now())
+  product         String   // COCONUT, HUSK, COPRA
+  transactionType String   // OPENING_STOCK, HARVEST, PURCHASE, SALE, HUSK_REMOVAL, COPRA_PROCESSING, ADJUSTMENT
+  quantity        Float    // Positive for inflow, negative for outflow
+  referenceType   String?  // HARVEST, PURCHASE, SALE, HUSK_REMOVAL, COPRA_PROCESSING, MANUAL
+  referenceId     String?
+  notes           String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([product])
+  @@index([date])
+  @@index([transactionType])
+}
+
+model HuskRemoval {
+  id              String   @id @default(cuid())
+  batchCode       String?  @unique // e.g. HR-2024-001
+  date            DateTime @default(now())
+  coconutQtyUsed  Int
+  huskGenerated   Int
+  huskWeightKg    Float    @default(0)
+  notes           String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([date])
+}
+
+model CopraProcessing {
+  id               String   @id @default(cuid())
+  batchCode        String?  @unique // e.g. CP-2024-001
+  date             DateTime @default(now())
+  coconutQtyUsed   Int
+  copraProducedKg  Float
+  processingCost   Float    @default(0)
+  notes            String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([date])
+}
+
+model Customer {
+  id           String   @id @default(cuid())
+  customerCode String?  @unique // e.g. CUST-1001
+  name         String
+  phone        String
+  address      String?
+  businessName String?
+  notes        String?
+  status       String   @default("ACTIVE") // ACTIVE, INACTIVE
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  sales        Sale[]
+
+  @@index([name])
+  @@index([phone])
+}
+
+model Sale {
+  id            String   @id @default(cuid())
+  invoiceNumber String?  @unique // e.g. INV-2024-001
+  saleDate      DateTime @default(now())
+  customerId    String
+  product       String   // COCONUT, HUSK, COPRA
+  quantity      Float
+  unitPrice     Float
+  totalAmount   Float
+  paymentStatus String   @default("PAID") // PAID, PARTIALLY_PAID, UNPAID
+  paymentMethod String   @default("CASH") // CASH, UPI, BANK_TRANSFER, CHEQUE, OTHER
+  notes         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  customer      Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([customerId])
+  @@index([saleDate])
+  @@index([product])
+}
+
+model Worker {
+  id           String          @id @default(cuid())
+  workerCode   String?         @unique // e.g. WRK-101
+  name         String
+  phone        String
+  address      String?
+  jobRole      String          // Harvester, Peeler, Kiln Operator, Driver, Supervisor
+  joiningDate  DateTime        @default(now())
+  salaryType   String          @default("MONTHLY") // DAILY, WEEKLY, MONTHLY, PER_TASK
+  salaryAmount Float
+  status       String          @default("ACTIVE") // ACTIVE, INACTIVE
+  notes        String?
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+
+  salaries     SalaryPayment[]
+
+  @@index([name])
+  @@index([status])
+}
+
+model SalaryPayment {
+  id            String   @id @default(cuid())
+  paymentCode   String?  @unique // e.g. SAL-2024-001
+  paymentDate   DateTime @default(now())
+  workerId      String
+  salaryPeriod  String   // e.g. "October 2024", "Week 42"
+  amount        Float
+  paymentMethod String   @default("CASH") // CASH, UPI, BANK_TRANSFER
+  notes         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  worker        Worker   @relation(fields: [workerId], references: [id], onDelete: Cascade)
+
+  @@index([workerId])
+  @@index([paymentDate])
+}
+
+model TransportExpense {
+  id            String   @id @default(cuid())
+  expenseCode   String?  @unique // e.g. TRN-2024-001
+  date          DateTime @default(now())
+  vehicleNumber String
+  driverName    String?
+  transportType String   @default("PICKUP_TRUCK") // PICKUP_TRUCK, TRACTOR, LORRY, AUTO
+  fromLocation  String
+  toLocation    String
+  purpose       String   // Coconut Procurement, Husk Transfer, Market Delivery
+  amount        Float
+  notes         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([date])
+}
+
+model OtherExpense {
+  id            String   @id @default(cuid())
+  expenseCode   String?  @unique // e.g. EXP-2024-001
+  date          DateTime @default(now())
+  category      String   // ELECTRICITY, MAINTENANCE, RENT, PROCESSING, PACKAGING, FUEL, OFFICE, MISCELLANEOUS
+  description   String
+  amount        Float
+  paymentMethod String   @default("CASH") // CASH, UPI, BANK_TRANSFER
+  notes         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([date])
+  @@index([category])
+}
